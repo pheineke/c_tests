@@ -3,29 +3,46 @@
 #include <pthread.h>
 #include <ncurses.h>
 #include <string.h>
+#include <unistd.h> // Für usleep()
 
-volatile char last_key = 0; // Variable für den letzten Tastendruck
 volatile int running = 1;   // Steuerung der Programmausführung
 
-volatile char input[] = "";
-
+#define MAX_INPUT_SIZE 256   // Maximale Eingabelänge
+char input[MAX_INPUT_SIZE] = ""; // Eingabepuffer
 
 void* key_event_listener(void* arg) {
     initscr();
     raw();
     keypad(stdscr, TRUE);
     noecho();
+    nodelay(stdscr, TRUE);   // Setzt getch() in den Non-Blocking-Modus
 
     while (running) {
-        last_key = getch();  // Speichert die letzte gedrückte Taste
-        if (last_key == '\n') {
-            printw("Enter-Taste gedrückt!\n");
-        } else if (last_key == 'q') {
-            running = 0;     // Beendet das Programm, wenn 'q' gedrückt wird
-        } else {
-            strcat(input, last_key);
+        int ch = getch();  // Versucht, ein Zeichen zu lesen, ohne zu blockieren
+        if (ch != ERR) {   // Wenn ein Zeichen verfügbar ist
+            if (ch == '\n') {
+                // Zeichenfolge wird nach dem Drücken von Enter geprüft
+                printw("\ninput is: %s\n", input);
+                refresh();  // Aktualisiert den Bildschirm
+                if (strcmp(input, "quit") == 0) {  // Vergleicht den Inhalt von `input` mit "quit"
+                    printw("HIER\n");
+                    refresh();
+                    running = 0;
+                }
+                // Zurücksetzen des Puffers
+                memset(input, 0, sizeof(input)); // Leert den gesamten Puffer
+            } else {
+                // Fügt Zeichen zum Puffer hinzu, wenn es nicht Enter ist
+                int len = strlen(input);
+                if (len < MAX_INPUT_SIZE - 1) {  // Überprüft, ob genügend Platz im Puffer vorhanden ist
+                    input[len] = (char)ch;
+                    input[len + 1] = '\0';  // Füge das Null-Terminatorzeichen hinzu
+                    printw("%c", (char)ch);  // Zeigt das Zeichen auf dem Bildschirm an
+                    refresh();               // Aktualisiert den Bildschirm
+                }
+            }
         }
-        refresh();
+        usleep(10000);  // Kleine Pause, um CPU-Last zu reduzieren
     }
 
     endwin();
@@ -40,15 +57,8 @@ int main() {
 
     // Hauptprogrammschleife
     while (running) {
-        if (last_key) {  // Überprüft, ob eine Taste außer Enter gedrückt wurde
-            if (last_key == '\n') {
-                printf("input is: %s\n", input);
-            } else {
-
-            }
-            last_key = 0;  // Setzt die Variable zurück, um die nächste Eingabe zu erfassen
-        }
-        //sleep(1);  // Simuliert Arbeit im Hauptprogramm
+        // Die Hauptschleife wartet einfach darauf, dass der Thread beendet wird
+        usleep(10000);  // Kleine Pause, um CPU-Last zu reduzieren
     }
 
     // Wartet, bis der Thread beendet ist
